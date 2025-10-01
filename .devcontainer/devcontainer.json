@@ -1,0 +1,25 @@
+{
+  "name": "node-dev",
+  "image": "mcr.microsoft.com/devcontainers/typescript-node:22",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+
+  "features": {
+    "ghcr.io/devcontainers/features/github-cli:1": {}
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": ["dbaeumer.vscode-eslint", "esbenp.prettier-vscode"]
+    }
+  },
+
+  "forwardPorts": [3000],
+
+  "containerEnv": {
+    "DOPPLER_TOKEN": "${localEnv:DOPPLER_TOKEN}",
+    "DOPPLER_PROJECT": "${localEnv:DOPPLER_PROJECT}",
+    "DOPPLER_CONFIG": "${localEnv:DOPPLER_CONFIG}"
+  },
+
+  "postCreateCommand": "bash -lc 'set -e; corepack enable || true; echo \"[postCreate] Installing Amp CLI...\"; (curl -fsSL https://ampcode.com/install.sh | bash && amp --version) || echo \"[postCreate] Amp install skipped\"; if command -v amp >/dev/null 2>&1; then if [ -n \"$AMP_API_KEY\" ]; then printf \"%s\\n\" \"$AMP_API_KEY\" | amp login --no-browser && echo \"[postCreate] Amp login succeeded\" || echo \"[postCreate] Amp login failed\"; else echo \"[postCreate] AMP_API_KEY not set; skipping Amp login\"; fi; else echo \"[postCreate] Amp CLI not available; skipping Amp login\"; fi; echo \"[postCreate] Trying to install Doppler CLI (optional)...\"; (curl -Ls --tlsv1.2 --proto \"=https\" --retry 3 https://cli.doppler.com/install.sh | sudo sh && doppler --version) || echo \"[postCreate] Doppler install skipped\"; if command -v doppler >/dev/null 2>&1 && [ -n \"$DOPPLER_TOKEN\" ] && [ -n \"$DOPPLER_PROJECT\" ] && [ -n \"$DOPPLER_CONFIG\" ]; then echo \"[postCreate] Configuring Doppler: $DOPPLER_PROJECT / $DOPPLER_CONFIG\"; doppler setup --project \"$DOPPLER_PROJECT\" --config \"$DOPPLER_CONFIG\" --no-interactive || true; else echo \"[postCreate] Doppler not configured (CLI or env vars missing) — continuing without it\"; fi; if command -v gh >/dev/null 2>&1; then GH_TOKEN_VALUE=\"\"; if command -v doppler >/dev/null 2>&1; then if doppler secrets get GITHUB_TOKEN --plain > /tmp/.gh-token 2>/dev/null; then GH_TOKEN_VALUE=$(cat /tmp/.gh-token); rm -f /tmp/.gh-token; fi; fi; if [ -z \"$GH_TOKEN_VALUE\" ] && [ -n \"$GITHUB_TOKEN\" ]; then GH_TOKEN_VALUE=\"$GITHUB_TOKEN\"; fi; if [ -z \"$GH_TOKEN_VALUE\" ] && [ -n \"$GH_PAT\" ]; then GH_TOKEN_VALUE=\"$GH_PAT\"; fi; if [ -n \"$GH_TOKEN_VALUE\" ]; then printf \"%s\\n\" \"$GH_TOKEN_VALUE\" | gh auth login --with-token && echo \"[postCreate] GitHub CLI authenticated via token\" || echo \"[postCreate] GitHub CLI token auth failed\"; else echo \"[postCreate] No GitHub token found; launching interactive gh auth login\"; gh auth login || echo \"[postCreate] GitHub CLI login skipped\"; fi; unset GH_TOKEN_VALUE; else echo \"[postCreate] GitHub CLI not available; skipping gh auth\"; fi'"
+}
