@@ -107,11 +107,14 @@ SUPABASE_KEY=eyJ...  # Service role key (not anon key!)
 Go to SQL Editor and run:
 
 ```sql
--- Create clients table for storing GHL credentials
+-- Create clients table for storing GHL credentials and phone numbers
 CREATE TABLE clients (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  client_name TEXT NOT NULL,
+  twilio_number TEXT UNIQUE NOT NULL,  -- The phone number for this client
   ghl_token TEXT NOT NULL,
   location_id TEXT NOT NULL,
+  timezone TEXT DEFAULT 'America/New_York',
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
@@ -119,13 +122,24 @@ CREATE TABLE clients (
 ALTER TABLE clients ENABLE ROW LEVEL SECURITY;
 
 -- Example: Insert your first client
-INSERT INTO clients (ghl_token, location_id)
+INSERT INTO clients (client_name, twilio_number, ghl_token, location_id, timezone)
 VALUES (
+  'Sample Business LLC',
+  '+15551234567',  -- Phone number purchased for this client
   'your-gohighlevel-api-token',
-  'your-ghl-location-id'
+  'your-ghl-location-id',
+  'America/New_York'
 )
 RETURNING id;  -- Save this ID for testing
 ```
+
+**Note on Transient Assistants:**
+This system uses a **transient assistant architecture**. Instead of creating persistent VAPI assistants for each client, when a call arrives to a client's number, the backend:
+1. Looks up the client by `twilio_number`
+2. Programmatically creates a temporary assistant with client-specific configuration
+3. Returns this config to VAPI for that call only
+
+This approach simplifies management and allows dynamic updates to all clients simultaneously.
 
 ### 4. Update Doppler with Supabase Credentials
 

@@ -106,7 +106,27 @@ The initial release of the 1000x Agent will _not_ include the following capabili
 
 ---
 
-### **6. Dependencies**
+### **6. Technical Architecture**
+
+**6.1. Transient Assistant Model**
+
+Instead of creating persistent VAPI assistants for each client, the system uses a **transient assistant architecture**:
+
+1. Each client is provisioned with a unique phone number
+2. The number and client details are stored in Supabase
+3. When a call arrives, the system looks up the client by phone number
+4. A transient assistant is programmatically created with client-specific configuration
+5. The assistant exists only for the duration of that call
+
+**Benefits:**
+- Eliminates complexity of managing multiple persistent assistants
+- Allows dynamic configuration based on real-time client data
+- Simplifies updates to assistant behavior across all clients
+- Reduces VAPI resource usage
+
+---
+
+### **7. Dependencies**
 
 - **External Services:** VAPI (voice), GoHighLevel (CRM), Supabase (credential vault & vector DB), Doppler (secrets).
 - **Internal Teams:** Client Onboarding Team (for setup and KB management), Development Team.
@@ -114,7 +134,7 @@ The initial release of the 1000x Agent will _not_ include the following capabili
 
 ---
 
-### **7. Success Metrics**
+### **8. Success Metrics**
 
 - **Efficiency & Performance:**
   - Average Response Time (< 60s)
@@ -128,7 +148,7 @@ The initial release of the 1000x Agent will _not_ include the following capabili
 
 ---
 
-### **8. Release Plan**
+### **9. Release Plan**
 
 A phased rollout is planned to ensure stability and gather feedback.
 
@@ -138,6 +158,6 @@ A phased rollout is planned to ensure stability and gather feedback.
 
 ---
 
-### **9. Appendix**
+### **10. Appendix**
 
 _No supplementary materials at this time._

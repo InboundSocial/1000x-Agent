@@ -1,5 +1,6 @@
 import express from "express";
 import { createClient } from "@supabase/supabase-js";
+import crypto from "crypto";
 
 const app = express();
 app.use(express.json());
@@ -15,6 +16,58 @@ if (!supabaseUrl || !supabaseKey) {
   process.exit(1);
 }
 const supabase = createClient(supabaseUrl, supabaseKey);
+
+// ----- In-memory cache for client lookups -----
+const clientCache = new Map();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedClient(phoneNumber) {
+  const cached = clientCache.get(phoneNumber);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  return null;
+}
+
+function setCachedClient(phoneNumber, clientData) {
+  clientCache.set(phoneNumber, {
+    data: clientData,
+    timestamp: Date.now()
+  });
+}
+
+// ----- Authentication Middleware -----
+function verifyBearerToken(req, res, next) {
+  const expectedToken = process.env.VAPI_WEBHOOK_TOKEN;
+  
+  // Skip auth if token not configured (for local dev)
+  if (!expectedToken) {
+    console.warn("[Auth] VAPI_WEBHOOK_TOKEN not set - skipping authentication");
+    return next();
+  }
+
+  const authHeader = req.headers.authorization;
+  
+  if (!authHeader || !authHeader.startsWith("Bearer ")) {
+    return res.status(401).json({ error: "Missing or invalid Authorization header" });
+  }
+
+  const token = authHeader.substring(7); // Remove "Bearer " prefix
+  
+  // Constant-time comparison to prevent timing attacks
+  const expectedBuffer = Buffer.from(expectedToken);
+  const actualBuffer = Buffer.from(token);
+  
+  if (expectedBuffer.length !== actualBuffer.length) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+  
+  if (!crypto.timingSafeEqual(expectedBuffer, actualBuffer)) {
+    return res.status(401).json({ error: "Invalid token" });
+  }
+  
+  next();
+}
 
 // ----- Basic routes -----
 app.get("/", (_req, res) => res.send("agent-backend is running"));
@@ -370,7 +423,7 @@ app.post("/tools/book_appointment", async (req, res) => {
 
 // ----- VAPI Webhooks -----
 // POST /vapi/webhooks - Handle VAPI call lifecycle events
-app.post("/vapi/webhooks", async (req, res) => {
+app.post("/vapi/webhooks", verifyBearerToken, async (req, res) => {
   try {
     const event = req.body;
     const eventType = event.type || event.message?.type;
@@ -421,32 +474,43 @@ async function handleAssistantRequest(event) {
 
     console.log(`[Assistant Request] Number called: ${phoneNumberCalled}, From: ${customerNumber}`);
 
-    // Look up client by VAPI number
-    const { data: client, error: dbErr } = await supabase
-      .from("clients")
-      .select("*")
-      .eq("twilio_number", phoneNumberCalled)
-      .single();
-
-    if (dbErr || !client) {
-      console.error(`[Assistant Request] No client found for: ${phoneNumberCalled}`);
-      // Return generic assistant
-      return {
-        name: "1000x Agent",
-        firstMessage: "Hello! How can I help you today?",
-        model: {
-          provider: "openai",
-          model: "gpt-4o",
-          messages: [{
-            role: "system",
-            content: "You are a helpful AI assistant."
-          }]
-        },
-        voice: {
-          provider: "11labs",
-          voiceId: "paula"
-        }
-      };
+    // Check cache first
+    let client = getCachedClient(phoneNumberCalled);
+    
+    if (!client) {
+      // Cache miss - look up client by VAPI number
+      const { data: dbClient, error: dbErr } = await supabase
+        .from("clients")
+        .select("*")
+        .eq("twilio_number", phoneNumberCalled)
+        .single();
+      
+      if (dbErr || !dbClient) {
+        console.error(`[Assistant Request] No client found for: ${phoneNumberCalled}`);
+        // Return generic assistant
+        return {
+          name: "1000x Agent",
+          firstMessage: "Hello! How can I help you today?",
+          model: {
+            provider: "openai",
+            model: "gpt-4o",
+            messages: [{
+              role: "system",
+              content: "You are a helpful AI assistant."
+            }]
+          },
+          voice: {
+            provider: "11labs",
+            voiceId: "paula"
+          }
+        };
+      }
+      
+      client = dbClient;
+      setCachedClient(phoneNumberCalled, client);
+      console.log(`[Assistant Request] Cache miss - loaded from DB`);
+    } else {
+      console.log(`[Assistant Request] Cache hit for ${phoneNumberCalled}`);
     }
 
     // Build personalized assistant config
@@ -487,7 +551,7 @@ Always be polite and end with "Is there anything else I can help you with?"`
         voiceId: "paula"
       },
       server: {
-        url: "https://agent-backend-7v2w.onrender.com/mcp",
+        url: process.env.BACKEND_URL || "https://agent-backend-7v2w.onrender.com/mcp",
         headers: {
           "x-phone-number": phoneNumberCalled,
           "Content-Type": "application/json"
