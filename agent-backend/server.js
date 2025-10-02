@@ -20,6 +20,90 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 app.get("/", (_req, res) => res.send("agent-backend is running"));
 app.get("/health", (_req, res) => res.send("ok"));
 
+// ----- MCP Proxy: Dynamic GHL routing based on phone number -----
+// expects x-phone-number header from VAPI
+app.post("/mcp", async (req, res) => {
+  try {
+    const phoneNumber = req.headers["x-phone-number"];
+    
+    if (!phoneNumber) {
+      return res.status(400).json({ 
+        error: "x-phone-number header required" 
+      });
+    }
+
+    // Look up client credentials by phone number
+    const { data: client, error: dbErr } = await supabase
+      .from("clients")
+      .select("ghl_token, location_id")
+      .eq("twilio_number", phoneNumber)
+      .single();
+
+    if (dbErr || !client) {
+      return res.status(404).json({ 
+        error: "Client not found for phone number" 
+      });
+    }
+
+    const { ghl_token, location_id } = client;
+    if (!ghl_token || !location_id) {
+      return res.status(400).json({ 
+        error: "Missing ghl_token or location_id for this client" 
+      });
+    }
+
+    // Forward MCP request to GHL with correct credentials
+    const ghlMcpUrl = "https://services.leadconnectorhq.com/mcp/";
+    const ghlResponse = await fetch(ghlMcpUrl, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${ghl_token}`,
+        "locationId": location_id,
+        "Content-Type": "application/json",
+        "Accept": "application/json, text/event-stream"
+      },
+      body: JSON.stringify(req.body)
+    });
+
+    // Check if response is SSE or JSON
+    const contentType = ghlResponse.headers.get('content-type');
+    
+    if (contentType && contentType.includes('text/event-stream')) {
+      // Stream SSE response back to client
+      res.setHeader('Content-Type', 'text/event-stream');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      
+      // Convert Web ReadableStream to Node stream
+      const reader = ghlResponse.body.getReader();
+      const decoder = new TextDecoder();
+      
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          res.write(decoder.decode(value, { stream: true }));
+        }
+        res.end();
+      } catch (streamErr) {
+        console.error('Stream error:', streamErr);
+        res.end();
+      }
+    } else {
+      // Handle JSON response
+      const responseData = await ghlResponse.json();
+      res.status(ghlResponse.status).json(responseData);
+    }
+    
+  } catch (e) {
+    console.error("MCP proxy error:", e);
+    return res.status(500).json({ 
+      error: "mcp_proxy_error", 
+      details: String(e) 
+    });
+  }
+});
+
 // ----- Tool: find_or_create_contact -----
 // expects JSON body: { client_id, phone?, email?, name? }
 app.post("/tools/find_or_create_contact", async (req, res) => {
@@ -81,15 +165,15 @@ app.post("/tools/find_or_create_contact", async (req, res) => {
       LocationId: location_id,
     };
 
+    const contactData = { locationId: location_id };
+    if (phone) contactData.phone = phone;
+    if (email) contactData.email = email;
+    if (name) contactData.name = name;
+
     const createResp = await fetch(`${GHL_BASE}/contacts/`, {
       method: "POST",
       headers: createHeaders,
-      body: JSON.stringify({
-        locationId: location_id,
-        phone: phone || "",
-        email: email || "",
-        name: name || "",
-      }),
+      body: JSON.stringify(contactData),
     });
 
     const createTxt = await createResp.text();
@@ -125,6 +209,423 @@ app.post("/tools/find_or_create_contact", async (req, res) => {
     return res.status(500).json({ error: "server_error", details: String(e) });
   }
 });
+
+// ----- Tool: check_availability -----
+// expects JSON body: { client_id, start_date, end_date }
+app.post("/tools/check_availability", async (req, res) => {
+  try {
+    const { client_id, start_date, end_date } = req.body;
+
+    if (!client_id || !start_date || !end_date) {
+      return res.status(400).json({ 
+        error: "client_id, start_date, and end_date are required" 
+      });
+    }
+
+    // Get client credentials
+    const { data: client, error: dbErr } = await supabase
+      .from("clients")
+      .select("ghl_token, location_id, calendar_id")
+      .eq("id", client_id)
+      .single();
+
+    if (dbErr || !client) {
+      return res.status(400).json({ error: "Client not found" });
+    }
+
+    const { ghl_token, location_id, calendar_id } = client;
+    if (!ghl_token || !calendar_id) {
+      return res.status(400).json({ 
+        error: "Missing credentials for this client" 
+      });
+    }
+
+    const GHL_BASE = "https://services.leadconnectorhq.com";
+
+    // Get available slots
+    const url = new URL(`${GHL_BASE}/calendars/${calendar_id}/free-slots`);
+    url.searchParams.set("startDate", new Date(start_date).getTime().toString());
+    url.searchParams.set("endDate", new Date(end_date).getTime().toString());
+
+    const slotsResp = await fetch(url.toString(), {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${ghl_token}`,
+        Version: "2021-07-28"
+      }
+    });
+
+    const responseText = await slotsResp.text();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      result = { raw: responseText };
+    }
+
+    if (!slotsResp.ok) {
+      return res.status(slotsResp.status).json({ 
+        error: "Failed to check availability", 
+        details: result 
+      });
+    }
+
+    return res.json({ 
+      success: true, 
+      slots: result 
+    });
+
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ 
+      error: "server_error", 
+      details: String(e) 
+    });
+  }
+});
+
+// ----- Tool: book_appointment -----
+// expects JSON body: { client_id, contact_id, start_time, end_time, title?, notes? }
+app.post("/tools/book_appointment", async (req, res) => {
+  try {
+    const { client_id, contact_id, start_time, end_time, title, notes } = req.body;
+
+    if (!client_id || !contact_id || !start_time || !end_time) {
+      return res.status(400).json({ 
+        error: "client_id, contact_id, start_time, and end_time are required" 
+      });
+    }
+
+    // Get client credentials
+    const { data: client, error: dbErr } = await supabase
+      .from("clients")
+      .select("ghl_token, location_id, calendar_id")
+      .eq("id", client_id)
+      .single();
+
+    if (dbErr || !client) {
+      return res.status(400).json({ error: "Client not found" });
+    }
+
+    const { ghl_token, location_id, calendar_id } = client;
+    if (!ghl_token || !location_id || !calendar_id) {
+      return res.status(400).json({ 
+        error: "Missing credentials for this client" 
+      });
+    }
+
+    const GHL_BASE = "https://services.leadconnectorhq.com";
+
+    // Create appointment
+    const appointmentData = {
+      calendarId: calendar_id,
+      locationId: location_id,
+      contactId: contact_id,
+      startTime: start_time,
+      endTime: end_time,
+      title: title || "Appointment",
+      appointmentStatus: "confirmed"
+    };
+
+    if (notes) appointmentData.notes = notes;
+
+    const createResp = await fetch(`${GHL_BASE}/calendars/events/appointments`, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${ghl_token}`,
+        Version: "2021-07-28",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(appointmentData)
+    });
+
+    const responseText = await createResp.text();
+    let result;
+    try {
+      result = JSON.parse(responseText);
+    } catch {
+      result = { raw: responseText };
+    }
+
+    if (!createResp.ok) {
+      return res.status(createResp.status).json({ 
+        error: "Failed to book appointment", 
+        details: result 
+      });
+    }
+
+    return res.json({ 
+      success: true, 
+      appointment: result 
+    });
+
+  } catch (e) {
+    console.error(e);
+    return res.status(500).json({ 
+      error: "server_error", 
+      details: String(e) 
+    });
+  }
+});
+
+// ----- VAPI Webhooks -----
+// POST /vapi/webhooks - Handle VAPI call lifecycle events
+app.post("/vapi/webhooks", async (req, res) => {
+  try {
+    const event = req.body;
+    const eventType = event.type || event.message?.type;
+
+    console.log(`[VAPI Webhook] Received event: ${eventType}`);
+
+    // Quick acknowledgment
+    res.status(200).json({ received: true });
+
+    // Process event asynchronously
+    switch (eventType) {
+      case "assistant-request":
+      case "call.started":
+        await handleCallStarted(event);
+        break;
+      
+      case "call.ended":
+      case "end-of-call-report":
+        await handleCallEnded(event);
+        break;
+      
+      case "status-update":
+        await handleStatusUpdate(event);
+        break;
+      
+      default:
+        console.log(`[VAPI Webhook] Unhandled event type: ${eventType}`);
+    }
+
+  } catch (e) {
+    console.error("[VAPI Webhook] Error:", e);
+    // Already sent 200, log error for monitoring
+  }
+});
+
+// Handle call started - create voice session and contact
+async function handleCallStarted(event) {
+  try {
+    const call = event.call || event.message?.call || {};
+    const callId = call.id;
+    const customerNumber = call.customer?.number || call.phoneNumber;
+    const vapiNumber = call.phoneNumber || call.to;
+    
+    console.log(`[Call Started] ID: ${callId}, Customer: ${customerNumber}`);
+
+    // Look up client by VAPI number
+    const { data: client, error: dbErr } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("twilio_number", vapiNumber)
+      .single();
+
+    if (dbErr || !client) {
+      console.error(`[Call Started] No client found for VAPI number: ${vapiNumber}`);
+      return;
+    }
+
+    // Create or update voice session
+    const { data: session, error: sessionErr } = await supabase
+      .from("voice_sessions")
+      .upsert({
+        id: callId,
+        client_id: client.id,
+        caller: customerNumber,
+        called_number: vapiNumber,
+        started_at: new Date().toISOString(),
+        context: { 
+          vapi_call_id: callId,
+          status: "in_progress" 
+        }
+      }, { onConflict: "id" })
+      .select()
+      .single();
+
+    if (sessionErr) {
+      console.error("[Call Started] Error creating session:", sessionErr);
+      return;
+    }
+
+    // Create or find contact in GHL
+    const GHL_BASE = "https://services.leadconnectorhq.com";
+    const authHeaders = {
+      Authorization: `Bearer ${client.ghl_token}`,
+      Version: "2021-07-28",
+    };
+
+    // Try to find existing contact
+    const searchUrl = new URL(`${GHL_BASE}/contacts/`);
+    searchUrl.searchParams.set("locationId", client.location_id);
+    searchUrl.searchParams.set("phone", customerNumber);
+
+    let contactId = null;
+    const foundResp = await fetch(searchUrl.toString(), { headers: authHeaders });
+    
+    if (foundResp.ok) {
+      const found = await foundResp.json();
+      if (found?.contacts?.length > 0) {
+        contactId = found.contacts[0].id;
+      }
+    }
+
+    // Create contact if not found
+    if (!contactId) {
+      const createResp = await fetch(`${GHL_BASE}/contacts/`, {
+        method: "POST",
+        headers: {
+          ...authHeaders,
+          "Content-Type": "application/json",
+          LocationId: client.location_id,
+        },
+        body: JSON.stringify({
+          locationId: client.location_id,
+          phone: customerNumber,
+        }),
+      });
+
+      if (createResp.ok) {
+        const created = await createResp.json();
+        contactId = created?.contact?.id;
+      }
+    }
+
+    // Update session with contact ID
+    if (contactId) {
+      await supabase
+        .from("voice_sessions")
+        .update({ 
+          context: { 
+            ...session.context, 
+            ghl_contact_id: contactId 
+          } 
+        })
+        .eq("id", callId);
+    }
+
+    console.log(`[Call Started] Session created: ${callId}, Contact: ${contactId}`);
+
+  } catch (e) {
+    console.error("[Call Started] Error:", e);
+  }
+}
+
+// Handle call ended - sync to GHL
+async function handleCallEnded(event) {
+  try {
+    const call = event.call || event.message?.call || {};
+    const callId = call.id;
+    const endedReason = call.endedReason || event.endedReason;
+    const transcript = event.transcript || call.transcript;
+    const summary = event.summary || call.summary;
+    const recordingUrl = event.recordingUrl || call.recordingUrl;
+    const duration = call.duration || event.duration;
+
+    console.log(`[Call Ended] ID: ${callId}, Reason: ${endedReason}`);
+
+    // Get session from database
+    const { data: session, error: sessionErr } = await supabase
+      .from("voice_sessions")
+      .select("*, clients(*)")
+      .eq("id", callId)
+      .single();
+
+    if (sessionErr || !session) {
+      console.error(`[Call Ended] Session not found: ${callId}`);
+      return;
+    }
+
+    // Update voice session with call outcomes
+    await supabase
+      .from("voice_sessions")
+      .update({
+        ended_at: new Date().toISOString(),
+        recording_url: recordingUrl,
+        context: {
+          ...session.context,
+          status: "completed",
+          ended_reason: endedReason,
+          duration: duration,
+          transcript: transcript,
+          summary: summary
+        }
+      })
+      .eq("id", callId);
+
+    // Sync to GHL - Add call note
+    const client = session.clients;
+    const contactId = session.context?.ghl_contact_id;
+
+    if (client && contactId) {
+      const GHL_BASE = "https://services.leadconnectorhq.com";
+      const authHeaders = {
+        Authorization: `Bearer ${client.ghl_token}`,
+        Version: "2021-07-28",
+        "Content-Type": "application/json"
+      };
+
+      // Create note with call summary
+      const noteBody = `
+📞 AI Call Summary
+Duration: ${duration || 'N/A'}
+Ended: ${endedReason || 'N/A'}
+
+${summary || 'No summary available'}
+
+${recordingUrl ? `🎙️ Recording: ${recordingUrl}` : ''}
+      `.trim();
+
+      await fetch(`${GHL_BASE}/contacts/${contactId}/notes`, {
+        method: "POST",
+        headers: authHeaders,
+        body: JSON.stringify({
+          body: noteBody,
+          userId: client.location_id // Or specific user ID
+        })
+      });
+
+      console.log(`[Call Ended] Synced to GHL contact: ${contactId}`);
+    }
+
+  } catch (e) {
+    console.error("[Call Ended] Error:", e);
+  }
+}
+
+// Handle status updates during call
+async function handleStatusUpdate(event) {
+  try {
+    const call = event.call || event.message?.call || {};
+    const callId = call.id;
+    const status = event.status || call.status;
+
+    // Update session context with latest status
+    const { data: session } = await supabase
+      .from("voice_sessions")
+      .select("context")
+      .eq("id", callId)
+      .single();
+
+    if (session) {
+      await supabase
+        .from("voice_sessions")
+        .update({
+          context: {
+            ...session.context,
+            last_status: status,
+            updated_at: new Date().toISOString()
+          }
+        })
+        .eq("id", callId);
+    }
+
+  } catch (e) {
+    console.error("[Status Update] Error:", e);
+  }
+}
 
 // ----- Start server -----
 const PORT = process.env.PORT || 3000;

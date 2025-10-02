@@ -5,9 +5,11 @@
   "main": "index.js",
   "type": "module",
   "scripts": {
+    "start": "node agent-backend/server.js",
     "dev": "doppler run -- node src/index.js",
     "dev:plain": "node src/index.js",
     "dev:backend": "doppler run -- node agent-backend/server.js",
+    "dev:local": "node --env-file=.env agent-backend/server.js",
     "dev:both": "doppler run -- node src/index.js & doppler run -- node agent-backend/server.js"
   },
   "keywords": [],
