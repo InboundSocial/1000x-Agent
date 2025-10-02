@@ -147,12 +147,10 @@ curl -X POST http://localhost:3000/tools/find_or_create_contact \
 ```
 1000x-Agent/
 ├── agent-backend/          # Express API backend
-│   ├── server.js          # Main server
-│   └── README.md          # Backend-specific docs
+│   └── server.js          # Main server with tool endpoints
 ├── scripts/
 │   └── doppler-login.sh   # Doppler authentication helper
-├── src/
-│   └── index.js           # Optional frontend/main app
+├── package.json           # Dependencies (express, supabase, etc.)
 ├── SETUP.md               # Detailed setup instructions
 └── README.md              # This file
 ```
@@ -200,10 +198,49 @@ doppler secrets set KEY=val  # Add missing ones
 
 ---
 
+## 🔨 Adding New Tool Endpoints
+
+Example: SMS sending endpoint
+
+```javascript
+// In agent-backend/server.js
+app.post("/tools/send_sms", async (req, res) => {
+  try {
+    const { client_id, phone, message } = req.body;
+
+    // Get client credentials from Supabase
+    const { data: client } = await supabase
+      .from("clients")
+      .select("ghl_token")
+      .eq("id", client_id)
+      .single();
+
+    // Call GoHighLevel SMS API
+    const response = await fetch(
+      "https://services.leadconnectorhq.com/conversations/messages",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${client.ghl_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone, message }),
+      }
+    );
+
+    const data = await response.json();
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+```
+
+---
+
 ## 📚 Documentation
 
 - **[SETUP.md](./SETUP.md)** - Complete setup guide with Doppler, Supabase, and troubleshooting
-- **[agent-backend/README.md](./agent-backend/README.md)** - Backend API details
 - **[.github/SECURITY.md](./.github/SECURITY.md)** - Security and secrets management
 
 ---
