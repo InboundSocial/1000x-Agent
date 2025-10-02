@@ -9,27 +9,39 @@ Cross-platform Node 22 starter with Doppler + Amp automation for quick project s
 - `npm run dev` wired through `doppler run -- node …` so secrets load automatically
 - Git ignores and sample env file to keep local state tidy
 
-## Quick Start
+## Quick Start (Secure Method)
 
 1. Use the GitHub template to create your repo.
-2. Clone locally, open in VS Code/Cursor, and select “Reopen in Container.”
-3. (Optional) Export any tokens before reopening: `AMP_API_KEY`, `GITHUB_TOKEN`, `DOPPLER_MANAGEMENT_TOKEN`.
-4. Inside the container run `./scripts/bootstrap-doppler.sh` to create/link a Doppler project.
-5. Follow the prompts to log into Doppler and add real secrets.
-6. Start developing: `npm install` then `npm run dev`.
+2. Clone locally, open in VS Code/Cursor, and select "Reopen in Container."
+3. Inside the container, run the login script:
+   ```bash
+   ./scripts/doppler-login.sh
+   ```
+4. Authenticate in your browser when prompted.
+5. Start developing: `npm install` then `npm run dev`.
 
+**See [`QUICKSTART.md`](./QUICKSTART.md) for detailed instructions.**
+
+### Alternative: Automated Setup for CI/CD
+
+For non-interactive environments, export tokens before reopening: `AMP_API_KEY`, `GITHUB_TOKEN`, `DOPPLER_TOKEN`.
 Full step-by-step instructions (including macOS/Windows notes) live in [`set-up.md`](./set-up.md).
 
 ## Key Commands
 
 ```bash
-# create Doppler project/config, seed secrets, link repo
-./scripts/bootstrap-doppler.sh
+# Login to Doppler (first time on each machine)
+./scripts/doppler-login.sh
 
-# run app with Doppler-managed secrets
+# Run app with Doppler-managed secrets
 npm run dev
 
-# fallback without Doppler
+# Manage secrets
+doppler secrets                    # list all
+doppler secrets set KEY=value      # update
+doppler secrets get KEY --plain    # view one
+
+# Fallback without Doppler
 npm run dev:plain
 ```
 
