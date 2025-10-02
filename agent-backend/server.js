@@ -377,12 +377,17 @@ app.post("/vapi/webhooks", async (req, res) => {
 
     console.log(`[VAPI Webhook] Received event: ${eventType}`);
 
-    // Quick acknowledgment
+    // Handle assistant-request synchronously (VAPI needs immediate response)
+    if (eventType === "assistant-request") {
+      const assistantConfig = await handleAssistantRequest(event);
+      return res.status(200).json(assistantConfig);
+    }
+
+    // Quick acknowledgment for other events
     res.status(200).json({ received: true });
 
-    // Process event asynchronously
+    // Process other events asynchronously
     switch (eventType) {
-      case "assistant-request":
       case "call.started":
         await handleCallStarted(event);
         break;
@@ -402,9 +407,104 @@ app.post("/vapi/webhooks", async (req, res) => {
 
   } catch (e) {
     console.error("[VAPI Webhook] Error:", e);
-    // Already sent 200, log error for monitoring
+    // Return error for assistant-request, otherwise log
+    res.status(500).json({ error: String(e) });
   }
 });
+
+// Handle assistant-request - Return dynamic assistant config
+async function handleAssistantRequest(event) {
+  try {
+    const call = event.call || {};
+    const phoneNumberCalled = call.phoneNumber || call.to;
+    const customerNumber = call.customer?.number || call.from;
+
+    console.log(`[Assistant Request] Number called: ${phoneNumberCalled}, From: ${customerNumber}`);
+
+    // Look up client by VAPI number
+    const { data: client, error: dbErr } = await supabase
+      .from("clients")
+      .select("*")
+      .eq("twilio_number", phoneNumberCalled)
+      .single();
+
+    if (dbErr || !client) {
+      console.error(`[Assistant Request] No client found for: ${phoneNumberCalled}`);
+      // Return generic assistant
+      return {
+        name: "1000x Agent",
+        firstMessage: "Hello! How can I help you today?",
+        model: {
+          provider: "openai",
+          model: "gpt-4o",
+          messages: [{
+            role: "system",
+            content: "You are a helpful AI assistant."
+          }]
+        },
+        voice: {
+          provider: "11labs",
+          voiceId: "paula"
+        }
+      };
+    }
+
+    // Build personalized assistant config
+    const assistantConfig = {
+      name: `1000x Agent - ${client.client_name}`,
+      firstMessage: `Thank you for calling ${client.client_name}! How can I help you today?`,
+      model: {
+        provider: "openai",
+        model: "gpt-4o",
+        messages: [{
+          role: "system",
+          content: `You are an AI receptionist for ${client.client_name}. 
+          
+Your responsibilities:
+- Answer questions about services
+- Book appointments by checking availability and creating bookings
+- Be friendly, professional, and helpful
+- Keep responses concise and natural
+
+Business Details:
+- Name: ${client.client_name}
+- Timezone: ${client.timezone}
+
+When booking appointments:
+1. Ask for their name and phone number
+2. Ask what service they need
+3. Check availability using the check_availability tool
+4. Offer available time slots
+5. Confirm the booking using book_appointment tool
+6. Confirm details back to the customer
+
+Always be polite and end with "Is there anything else I can help you with?"`
+        }],
+        tools: []
+      },
+      voice: {
+        provider: "11labs",
+        voiceId: "paula"
+      },
+      server: {
+        url: "https://agent-backend-7v2w.onrender.com/mcp",
+        headers: {
+          "x-phone-number": phoneNumberCalled,
+          "Content-Type": "application/json"
+        }
+      },
+      endCallPhrases: ["goodbye", "bye", "talk to you later"],
+      maxDurationSeconds: 1800 // 30 minutes max
+    };
+
+    console.log(`[Assistant Request] Returning config for: ${client.client_name}`);
+    return assistantConfig;
+
+  } catch (e) {
+    console.error("[Assistant Request] Error:", e);
+    throw e;
+  }
+}
 
 // Handle call started - create voice session and contact
 async function handleCallStarted(event) {
