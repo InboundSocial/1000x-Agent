@@ -1,175 +1,175 @@
 # Agent Backend
 
-Lightweight backend for contractor AI agents. Provides tool endpoints (e.g., find/create contacts, book appointments, send SMS) that connect VAPI assistants to GoHighLevel and Twilio.
+Express API providing tool endpoints for VAPI assistants. Integrates with GoHighLevel CRM via Supabase-stored credentials.
 
-## 🏗️ Architecture
+---
 
-- **Express** server with REST API endpoints
-- **Supabase** for client credential storage
-- **GoHighLevel (GHL)** integration for CRM operations
-- **Doppler** for secrets management (migrated from Render)
-
-## 🔐 Required Secrets (in Doppler)
-
-The backend needs these environment variables:
-
-### Already in Doppler ✅
+## 🚀 Quick Start
 
 ```bash
-SUPABASE_URL=https://fqptsjvfvhippzwsxdza.supabase.co
-SUPABASE_KEY=your_supabase_service_key
-PORT=3000  # or 3001 if running alongside main app
+# From project root
+npm run dev:backend
+
+# Test
+curl http://localhost:3000/health
 ```
 
-### Database Schema (Supabase)
+See [main SETUP.md](../SETUP.md) for complete installation.
 
-The backend expects a `clients` table with:
+---
+
+## 📡 API Endpoints
+
+### `GET /health`
+
+Health check endpoint.
+
+**Response:** `"ok"`
+
+---
+
+### `GET /`
+
+Root endpoint.
+
+**Response:** `"agent-backend is running"`
+
+---
+
+### `POST /tools/find_or_create_contact`
+
+Find existing contact or create new one in GoHighLevel CRM.
+
+**Request Body:**
+
+```json
+{
+  "client_id": "uuid", // Required: Client UUID from Supabase
+  "email": "user@example.com", // Required: Contact email
+  "phone": "+15551234567", // Optional: Contact phone
+  "name": "John Doe" // Optional: Contact name
+}
+```
+
+**Success Response:**
+
+```json
+{
+  "contactId": "ghl-id",
+  "existed": false,
+  "contact": {
+    "id": "ghl-id",
+    "email": "user@example.com",
+    "locationId": "...",
+    "type": "lead",
+    ...
+  }
+}
+```
+
+**Error Response:**
+
+```json
+{
+  "error": "Missing ghl_token or location_id for this client."
+}
+```
+
+---
+
+## 🔐 How It Works
+
+1. **Receives request** with `client_id`
+2. **Fetches credentials** from Supabase `clients` table:
+   - `ghl_token` - GoHighLevel API token
+   - `location_id` - GHL location ID
+3. **Searches GHL** for existing contact by email/phone
+4. **Creates contact** if not found
+5. **Returns** contact ID and details
+
+---
+
+## 📊 Supabase Schema
 
 ```sql
 CREATE TABLE clients (
-  id UUID PRIMARY KEY,
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   ghl_token TEXT NOT NULL,      -- GoHighLevel API token
   location_id TEXT NOT NULL,     -- GHL location ID
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 ```
 
-## 🚀 Running the Backend
+---
 
-### Development (with Doppler)
+## 🛠️ Environment Variables
 
-```bash
-# Install dependencies (from root)
-npm install
+Loaded via Doppler:
 
-# Run just the backend
-npm run dev:backend
+- `SUPABASE_URL` - Supabase project URL
+- `SUPABASE_KEY` - Supabase service role key
+- `PORT` - Server port (default: 3000)
+- `NODE_ENV` - Environment (development/production)
 
-# Run both frontend + backend
-npm run dev:both
-```
-
-### Standalone (without root dependencies)
-
-```bash
-cd agent-backend
-npm install
-doppler run -- node server.js
-```
-
-## 📡 API Endpoints
-
-### Health Check
-
-```bash
-GET /
-# Response: "agent-backend is running"
-
-GET /health
-# Response: "ok"
-```
-
-### Find or Create Contact
-
-```bash
-POST /tools/find_or_create_contact
-Content-Type: application/json
-
-{
-  "client_id": "uuid-of-client-in-supabase",
-  "phone": "+1234567890",      # optional
-  "email": "user@example.com", # optional
-  "name": "John Doe"           # optional
-}
-
-# Response:
-{
-  "contactId": "ghl-contact-id",
-  "existed": true,              # false if newly created
-  "contact": { ... }            # GHL contact object
-}
-```
-
-## 🔄 Migration from Render
-
-### What Changed
-
-- ✅ Moved env vars from Render to Doppler
-- ✅ Integrated into monorepo with shared dependencies
-- ✅ Added `npm run dev:backend` script
-- ✅ Supabase credentials now shared across all services
-
-### Old Render Setup (deprecated)
-
-```bash
-# These were set in Render dashboard:
-SUPABASE_URL=...
-SUPABASE_KEY=...
-PORT=3000
-```
-
-### New Doppler Setup
-
-```bash
-# One-time: Add secrets to Doppler
-doppler secrets set SUPABASE_URL=https://fqptsjvfvhippzwsxdza.supabase.co
-doppler secrets set SUPABASE_KEY=your_key
-doppler secrets set PORT=3001  # if running alongside main app
-
-# Run with Doppler
-npm run dev:backend
-```
+---
 
 ## 🧪 Testing
 
 ```bash
-# Test health endpoint
-curl http://localhost:3000/health
-
-# Test contact creation (requires Supabase client setup)
+# Get your client_id from Supabase
 curl -X POST http://localhost:3000/tools/find_or_create_contact \
   -H "Content-Type: application/json" \
   -d '{
-    "client_id": "your-client-uuid",
-    "phone": "+1234567890",
+    "client_id": "your-uuid-here",
+    "email": "test@example.com",
     "name": "Test Contact"
   }'
 ```
 
-## 🔧 Troubleshooting
+---
 
-### "Missing SUPABASE_URL or SUPABASE_KEY"
+## 📝 Adding New Endpoints
 
-```bash
-# Verify secrets are in Doppler
-doppler secrets get SUPABASE_URL --plain
-doppler secrets get SUPABASE_KEY --plain
+Example: SMS sending
 
-# Make sure you're running with doppler run
-npm run dev:backend  # uses doppler run internally
+```javascript
+app.post("/tools/send_sms", async (req, res) => {
+  try {
+    const { client_id, phone, message } = req.body;
+
+    // Get client creds
+    const { data: client } = await supabase
+      .from("clients")
+      .select("ghl_token")
+      .eq("id", client_id)
+      .single();
+
+    // Call GHL API
+    const response = await fetch(
+      "https://services.leadconnectorhq.com/conversations/messages",
+      {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${client.ghl_token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ phone, message }),
+      }
+    );
+
+    const data = await response.json();
+    res.json({ success: true, data });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
 ```
 
-### Port Conflict
+---
 
-If port 3000 is in use:
+## 🔗 Resources
 
-```bash
-# Change PORT in Doppler
-doppler secrets set PORT=3001
-
-# Or run manually
-doppler run -- PORT=3001 node agent-backend/server.js
-```
-
-## 📝 Next Steps
-
-1. Ensure `clients` table exists in Supabase
-2. Add GHL credentials for your clients to Supabase
-3. Test the `/tools/find_or_create_contact` endpoint
-4. Add additional tool endpoints as needed
-
-## 🔗 Related Docs
-
-- [Main Project README](../README.md)
-- [Doppler Quick Start](../QUICKSTART.md)
-- [Security Guide](../.github/SECURITY.md)
+- [Main README](../README.md) - Project overview
+- [SETUP.md](../SETUP.md) - Complete setup guide
+- [GoHighLevel API Docs](https://highlevel.stoplight.io/)
+- [Supabase Docs](https://supabase.com/docs)
