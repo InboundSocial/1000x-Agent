@@ -1,16 +1,22 @@
 {
-  "name": "my-dev-stack",
+  "name": "1000x-agent",
   "version": "1.0.0",
-  "description": "",
+  "description": "AI agent backend with Doppler secrets management",
   "main": "index.js",
+  "type": "module",
   "scripts": {
     "dev": "doppler run -- node src/index.js",
-    "dev:plain": "node src/index.js"
+    "dev:plain": "node src/index.js",
+    "dev:backend": "doppler run -- node agent-backend/server.js",
+    "dev:both": "doppler run -- node src/index.js & doppler run -- node agent-backend/server.js"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "fastify": "^5.6.1"
+    "fastify": "^5.6.1",
+    "express": "^4.19.2",
+    "@supabase/supabase-js": "^2.45.0",
+    "node-fetch": "^3.3.2"
   }
 }
