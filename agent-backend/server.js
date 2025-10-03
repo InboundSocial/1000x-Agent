@@ -594,7 +594,7 @@ Always be polite and professional.`
               }
             },
             server: {
-              url: "${process.env.BACKEND_URL || 'https://agent-backend-7v2w.onrender.com'}/tools/find_or_create_contact"
+              url: `${process.env.BACKEND_URL || 'https://agent-backend-7v2w.onrender.com'}/tools/find_or_create_contact`
             }
           },
           {
@@ -623,7 +623,7 @@ Always be polite and professional.`
               }
             },
             server: {
-              url: "${process.env.BACKEND_URL || 'https://agent-backend-7v2w.onrender.com'}/tools/check_availability"
+              url: `${process.env.BACKEND_URL || 'https://agent-backend-7v2w.onrender.com'}/tools/check_availability`
             }
           },
           {
@@ -660,7 +660,7 @@ Always be polite and professional.`
               }
             },
             server: {
-              url: "${process.env.BACKEND_URL || 'https://agent-backend-7v2w.onrender.com'}/tools/book_appointment"
+              url: `${process.env.BACKEND_URL || 'https://agent-backend-7v2w.onrender.com'}/tools/book_appointment`
             }
           }
         ]
