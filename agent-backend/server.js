@@ -646,8 +646,9 @@ Business Details:
 
 Caller Information:
 - Caller's phone number: ${customerNumber || 'Unknown'}
-- Only mention this number if asking for confirmation or if they request a callback number
-- Don't repeatedly state their phone number back to them
+- If you need to say the phone number, format it naturally: "area code 250, 572, 7588" with natural pauses
+- NEVER spell it out digit by digit like "2 5 0 5 7 2 7 5 8 8"
+- Only mention the number once for confirmation, then move on
 
 When booking appointments:
 1. Ask for their name and phone number (or confirm the number you already have)
