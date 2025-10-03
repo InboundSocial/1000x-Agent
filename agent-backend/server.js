@@ -552,8 +552,8 @@ Business Details:
 
 Caller Information:
 - Caller's phone number: ${customerNumber || 'Unknown'}
-- Use this number naturally in conversation (e.g., "In case we get disconnected, I can reach you back at ${customerNumber || 'your number'}, correct?")
-- For returning customers, you can reference this number when pulling up their details
+- Only mention this number if asking for confirmation or if they request a callback number
+- Don't repeatedly state their phone number back to them
 
 When booking appointments:
 1. Ask for their name and phone number (or confirm the number you already have)
