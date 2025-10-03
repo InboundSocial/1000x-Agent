@@ -657,23 +657,23 @@ Caller Information:
 When booking appointments:
 1. Ask for their FULL name - "May I have your first and last name?"
 2. If they only give first name (like "Mike"), follow up with "And your last name?"
-3. Ask for their email - "And finally, can I grab an email to throw on file?"
+3. Ask for their email address - "And can I get an email address?"
 4. Confirm the phone number you already have
-5. Ask their preferred date and time
-6. IMPORTANT: Call find_or_create_contact IMMEDIATELY after collecting name and email, BEFORE checking availability
-   - name: FULL name exactly as they said it - "Mike Johnson" (NOT just "Mike")
+5. CRITICAL: You MUST have full name (first AND last), email, and phone BEFORE calling find_or_create_contact
+6. Call find_or_create_contact with ALL fields:
+   - name: FULL name with first AND last (e.g., "Mike Johnson", NOT "Mike")
    - phone: The caller's phone number
-   - email: The email address they gave you
-   - You MUST include ALL three fields in the function call
-7. Check availability using check_availability function for the requested date
-8. Decide how to present slots based on their request:
+   - email: The email they provided
+7. Ask their preferred date and time
+8. Check availability using check_availability function for the requested date
+9. Decide how to present slots based on their request:
    - If they requested a SPECIFIC time (e.g., "1pm", "around lunch"): Offer the 2 closest available slots
    - If asking GENERAL availability (e.g., "what's open Monday?"): 
      * If slots span morning and afternoon, ask: "We have a few slots open - would you prefer morning or afternoon?"
      * If only morning OR afternoon available, say: "The afternoon is pretty free, do you have a preferred time?"
-9. After they choose or specify a time, offer max 2 specific slots
-10. Book with book_appointment using the contact_id from step 6
-11. Confirm using FIRST NAME ONLY (e.g., "Perfect, Mike, you're all set for Monday at 2pm")
+10. After they choose or specify a time, offer max 2 specific slots
+11. Book with book_appointment using the contact_id from step 6
+12. Confirm using FIRST NAME ONLY (e.g., "Perfect, Mike, you're all set for Monday at 2pm")
 
 Critical rules:
 - NEVER mention tools, systems, databases, or technical processes to callers
@@ -690,7 +690,7 @@ Always be polite and professional.`
             async: false,
             function: {
               name: "find_or_create_contact",
-              description: "Find or create a contact in the CRM. Use this after collecting the customer's name and phone number, before booking appointments.",
+              description: "Find or create a contact in the CRM. MUST be called with full name, phone, and email after collecting all three from the customer.",
               parameters: {
                 type: "object",
                 properties: {
@@ -701,7 +701,7 @@ Always be polite and professional.`
                   },
                   name: {
                     type: "string",
-                    description: "Customer's full name"
+                    description: "Customer's FULL name (first and last name)"
                   },
                   phone: {
                     type: "string",
@@ -709,10 +709,10 @@ Always be polite and professional.`
                   },
                   email: {
                     type: "string",
-                    description: "Customer's email address (optional)"
+                    description: "Customer's email address"
                   }
                 },
-                required: ["client_id", "phone"]
+                required: ["client_id", "name", "phone", "email"]
               }
             },
             server: {
