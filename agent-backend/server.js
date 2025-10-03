@@ -158,16 +158,24 @@ app.post("/mcp", async (req, res) => {
 });
 
 // ----- Tool: find_or_create_contact -----
-// expects JSON body: { client_id, phone?, email?, name? }
+// VAPI sends: { message: { toolCalls: [{ id, function: { arguments } }] } }
 app.post("/tools/find_or_create_contact", async (req, res) => {
   try {
     console.log("[Tool: find_or_create_contact] Called with:", JSON.stringify(req.body, null, 2));
-    const { client_id, phone, email, name } = req.body;
+    
+    // Extract from VAPI format
+    const toolCall = req.body.message?.toolCalls?.[0] || req.body.message?.toolCallList?.[0];
+    const toolCallId = toolCall?.id;
+    const { client_id, phone, email, name } = toolCall?.function?.arguments || req.body;
 
     if (!client_id || (!phone && !email)) {
-      return res
-        .status(400)
-        .json({ error: "client_id and phone or email are required" });
+      return res.status(200).json({
+        results: [{
+          name: "find_or_create_contact",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: "client_id and phone or email are required" })
+        }]
+      });
     }
 
     // 1) Pull GHL creds for this client from Supabase
@@ -205,7 +213,13 @@ app.post("/tools/find_or_create_contact", async (req, res) => {
       const found = await foundResp.json();
       if (Array.isArray(found?.contacts) && found.contacts.length > 0) {
         const contact = found.contacts[0];
-        return res.json({ contactId: contact.id, existed: true, contact });
+        return res.status(200).json({
+          results: [{
+            name: "find_or_create_contact",
+            toolCallId: toolCallId,
+            result: JSON.stringify({ contactId: contact.id, existed: true })
+          }]
+        });
       }
       // not found → proceed to create
     } else {
@@ -240,40 +254,64 @@ app.post("/tools/find_or_create_contact", async (req, res) => {
 
     // Handle duplicate error (400) and return existing ID
     if (createResp.status === 400 && created?.meta?.contactId) {
-      return res.json({
-        contactId: created.meta.contactId,
-        existed: true,
-        duplicate: true,
-        contact: null,
+      return res.status(200).json({
+        results: [{
+          name: "find_or_create_contact",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ contactId: created.meta.contactId, existed: true })
+        }]
       });
     }
 
     if (!createResp.ok) {
-      return res.status(400).json({ error: `GHL create failed: ${createTxt}` });
+      return res.status(200).json({
+        results: [{
+          name: "find_or_create_contact",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: `GHL create failed: ${createTxt}` })
+        }]
+      });
     }
 
     // New contact created
-    return res.json({
-      contactId: created?.contact?.id,
-      existed: false,
-      contact: created?.contact,
+    return res.status(200).json({
+      results: [{
+        name: "find_or_create_contact",
+        toolCallId: toolCallId,
+        result: JSON.stringify({ contactId: created?.contact?.id, existed: false })
+      }]
     });
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ error: "server_error", details: String(e) });
+    const toolCall = req.body.message?.toolCalls?.[0] || req.body.message?.toolCallList?.[0];
+    return res.status(200).json({
+      results: [{
+        name: "find_or_create_contact",
+        toolCallId: toolCall?.id,
+        result: JSON.stringify({ error: "server_error", details: String(e) })
+      }]
+    });
   }
 });
 
 // ----- Tool: check_availability -----
-// expects JSON body: { client_id, start_date, end_date }
+// VAPI sends: { message: { toolCalls: [{ id, function: { arguments } }] } }
 app.post("/tools/check_availability", async (req, res) => {
   try {
     console.log("[Tool: check_availability] Called with:", JSON.stringify(req.body, null, 2));
-    const { client_id, start_date, end_date } = req.body;
+    
+    // Extract from VAPI format
+    const toolCall = req.body.message?.toolCalls?.[0] || req.body.message?.toolCallList?.[0];
+    const toolCallId = toolCall?.id;
+    const { client_id, start_date, end_date } = toolCall?.function?.arguments || req.body;
 
     if (!client_id || !start_date || !end_date) {
-      return res.status(400).json({ 
-        error: "client_id, start_date, and end_date are required" 
+      return res.status(200).json({
+        results: [{
+          name: "check_availability",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: "client_id, start_date, and end_date are required" })
+        }]
       });
     }
 
@@ -285,13 +323,23 @@ app.post("/tools/check_availability", async (req, res) => {
       .single();
 
     if (dbErr || !client) {
-      return res.status(400).json({ error: "Client not found" });
+      return res.status(200).json({
+        results: [{
+          name: "check_availability",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: "Client not found" })
+        }]
+      });
     }
 
     const { ghl_token, location_id, calendar_id } = client;
     if (!ghl_token || !calendar_id) {
-      return res.status(400).json({ 
-        error: "Missing credentials for this client" 
+      return res.status(200).json({
+        results: [{
+          name: "check_availability",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: "Missing credentials for this client" })
+        }]
       });
     }
 
@@ -319,36 +367,54 @@ app.post("/tools/check_availability", async (req, res) => {
     }
 
     if (!slotsResp.ok) {
-      return res.status(slotsResp.status).json({ 
-        error: "Failed to check availability", 
-        details: result 
+      return res.status(200).json({
+        results: [{
+          name: "check_availability",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: "Failed to check availability", details: result })
+        }]
       });
     }
 
-    return res.json({ 
-      success: true, 
-      slots: result 
+    return res.status(200).json({
+      results: [{
+        name: "check_availability",
+        toolCallId: toolCallId,
+        result: JSON.stringify({ success: true, slots: result })
+      }]
     });
 
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ 
-      error: "server_error", 
-      details: String(e) 
+    const toolCall = req.body.message?.toolCalls?.[0] || req.body.message?.toolCallList?.[0];
+    return res.status(200).json({
+      results: [{
+        name: "check_availability",
+        toolCallId: toolCall?.id,
+        result: JSON.stringify({ error: "server_error", details: String(e) })
+      }]
     });
   }
 });
 
 // ----- Tool: book_appointment -----
-// expects JSON body: { client_id, contact_id, start_time, end_time, title?, notes? }
+// VAPI sends: { message: { toolCalls: [{ id, function: { arguments } }] } }
 app.post("/tools/book_appointment", async (req, res) => {
   try {
     console.log("[Tool: book_appointment] Called with:", JSON.stringify(req.body, null, 2));
-    const { client_id, contact_id, start_time, end_time, title, notes } = req.body;
+    
+    // Extract from VAPI format
+    const toolCall = req.body.message?.toolCalls?.[0] || req.body.message?.toolCallList?.[0];
+    const toolCallId = toolCall?.id;
+    const { client_id, contact_id, start_time, end_time, title, notes } = toolCall?.function?.arguments || req.body;
 
     if (!client_id || !contact_id || !start_time || !end_time) {
-      return res.status(400).json({ 
-        error: "client_id, contact_id, start_time, and end_time are required" 
+      return res.status(200).json({
+        results: [{
+          name: "book_appointment",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: "client_id, contact_id, start_time, and end_time are required" })
+        }]
       });
     }
 
@@ -360,13 +426,23 @@ app.post("/tools/book_appointment", async (req, res) => {
       .single();
 
     if (dbErr || !client) {
-      return res.status(400).json({ error: "Client not found" });
+      return res.status(200).json({
+        results: [{
+          name: "book_appointment",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: "Client not found" })
+        }]
+      });
     }
 
     const { ghl_token, location_id, calendar_id } = client;
     if (!ghl_token || !location_id || !calendar_id) {
-      return res.status(400).json({ 
-        error: "Missing credentials for this client" 
+      return res.status(200).json({
+        results: [{
+          name: "book_appointment",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: "Missing credentials for this client" })
+        }]
       });
     }
 
@@ -404,22 +480,32 @@ app.post("/tools/book_appointment", async (req, res) => {
     }
 
     if (!createResp.ok) {
-      return res.status(createResp.status).json({ 
-        error: "Failed to book appointment", 
-        details: result 
+      return res.status(200).json({
+        results: [{
+          name: "book_appointment",
+          toolCallId: toolCallId,
+          result: JSON.stringify({ error: "Failed to book appointment", details: result })
+        }]
       });
     }
 
-    return res.json({ 
-      success: true, 
-      appointment: result 
+    return res.status(200).json({
+      results: [{
+        name: "book_appointment",
+        toolCallId: toolCallId,
+        result: JSON.stringify({ success: true, appointment: result })
+      }]
     });
 
   } catch (e) {
     console.error(e);
-    return res.status(500).json({ 
-      error: "server_error", 
-      details: String(e) 
+    const toolCall = req.body.message?.toolCalls?.[0] || req.body.message?.toolCallList?.[0];
+    return res.status(200).json({
+      results: [{
+        name: "book_appointment",
+        toolCallId: toolCall?.id,
+        result: JSON.stringify({ error: "server_error", details: String(e) })
+      }]
     });
   }
 });
