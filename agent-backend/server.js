@@ -461,8 +461,10 @@ app.post("/vapi/webhooks", verifyBearerToken, async (req, res) => {
 
   } catch (e) {
     console.error("[VAPI Webhook] Error:", e);
-    // Return error for assistant-request, otherwise log
-    res.status(500).json({ error: String(e) });
+    // Only return error response if headers haven't been sent yet
+    if (!res.headersSent) {
+      res.status(500).json({ error: String(e) });
+    }
   }
 });
 
@@ -768,6 +770,11 @@ async function handleStatusUpdate(event) {
     const callId = call.id;
     const status = event.status || call.status;
 
+    if (!callId) {
+      console.log("[Status Update] No call ID in event, skipping");
+      return;
+    }
+
     // Update session context with latest status
     const { data: session } = await supabase
       .from("voice_sessions")
@@ -786,6 +793,9 @@ async function handleStatusUpdate(event) {
           }
         })
         .eq("id", callId);
+      console.log(`[Status Update] Updated session ${callId} with status: ${status}`);
+    } else {
+      console.log(`[Status Update] Session ${callId} not found (may not be created yet)`);
     }
 
   } catch (e) {
