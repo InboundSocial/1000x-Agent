@@ -6,6 +6,147 @@ This log tracks key decisions, status updates, and context for the "1000x Agent"
 
 ---
 
+**Date:** 2025-10-03  
+**Author:** Development Team  
+**Summary:** VAPI Integration Testing - Assistant Request Working, Debugging Config Rejection
+
+**What Was Accomplished:**
+
+Successfully got VAPI to send `assistant-request` events and parse phone numbers correctly. System now:
+- ✅ Receives assistant-request webhooks from VAPI
+- ✅ Looks up client by phone number (+17787450185)
+- ✅ Loads client from database (Automated Profits)
+- ✅ Builds dynamic assistant configuration
+- ✅ Returns config to VAPI
+
+**Current Issue:**
+
+VAPI is receiving the assistant config but rejecting it with error:
+```
+"couldn't get assistant, either set the assistant id on the phone number or check the debugging"
+```
+
+**Debugging Steps Taken:**
+
+1. **Fixed Phone Number Parsing:**
+   - Issue: Phone number was coming as `undefined`
+   - Root cause: VAPI wraps event in `message` object
+   - Fix: Updated parsing to `event.message.phoneNumber.number`
+   - Result: ✅ Now correctly parses `+17787450185`
+
+2. **Configured VAPI Phone Number for Server URL:**
+   - Created script: `scripts/configure-vapi-number.sh`
+   - Removed persistent assistantId via VAPI API
+   - Set serverUrl on phone number
+   - Result: ✅ Now receives `assistant-request` events
+
+3. **Added Config Logging:**
+   - Added detailed logging to see exact JSON being sent to VAPI
+   - Will help identify which field(s) VAPI is rejecting
+   - Code change ready to push
+
+**Current Assistant Config Structure:**
+
+```javascript
+{
+  name: "1000x Agent - ${client.client_name}",
+  firstMessage: "Thank you for calling...",
+  model: {
+    provider: "openai",
+    model: "gpt-4o",
+    messages: [{ role: "system", content: "..." }],
+    tools: []  // Empty for now
+  },
+  voice: {
+    provider: "11labs",
+    voiceId: "paula"
+  },
+  server: {
+    url: "https://agent-backend-7v2w.onrender.com/mcp",
+    headers: {
+      "x-phone-number": phoneNumberCalled,
+      "Content-Type": "application/json"
+    }
+  },
+  endCallPhrases: ["goodbye", "bye", "talk to you later"],
+  maxDurationSeconds: 1800
+}
+```
+
+**Logs from Last Call Attempt:**
+
+```
+[VAPI Webhook] Received event: assistant-request
+[Assistant Request] Number called: +17787450185, From: +12505727588
+[Assistant Request] Cache miss - loaded from DB
+[Assistant Request] Returning config for: Automated Profits
+```
+
+Backend successfully built and returned config, but VAPI rejected it.
+
+**Next Steps for Tomorrow:**
+
+1. **Push the latest code change** (added config logging)
+   ```bash
+   git add agent-backend/server.js
+   git commit -m "Add detailed logging for assistant config"
+   git push
+   ```
+
+2. **Wait for Render to redeploy** (~2-3 minutes)
+
+3. **Call the VAPI number again** (+17787450185)
+
+4. **Check Render logs** for the new log line:
+   ```
+   [Assistant Request] Sending config to VAPI: { ... }
+   ```
+   This will show the exact JSON being sent to VAPI
+
+5. **Compare with VAPI's expected format:**
+   - Check [VAPI docs](https://docs.vapi.ai/assistants/dynamic-assistants) for required fields
+   - Identify missing or incorrectly formatted fields
+   - Adjust assistant config structure accordingly
+
+6. **Potential Issues to Check:**
+   - VAPI might require `assistant` wrapper object
+   - Field names might be different (e.g., `firstMessage` vs `firstMessageContent`)
+   - Required fields might be missing
+   - Voice provider/ID format might be incorrect
+
+**Environment Details:**
+
+- **VAPI Phone Number:** +17787450185
+- **VAPI Phone Number ID:** 8bac8f61-ca90-4b1c-a480-5872e906b63a
+- **Render Backend URL:** https://agent-backend-7v2w.onrender.com
+- **Test Client:** Automated Profits
+- **Database:** Fully set up with indexes and schema
+
+**Known Working Components:**
+
+- ✅ Backend deployed and running on Render
+- ✅ Database connection working
+- ✅ Client lookup by phone number working
+- ✅ Cache system working
+- ✅ VAPI webhook endpoint receiving events
+- ✅ Phone number parsing correct
+- ✅ Assistant config being built and returned
+
+**What's NOT Connected Yet:**
+
+- ❌ Tools (calendar, contacts) - `tools: []` is empty array
+- ❌ Knowledge base - Not set up
+- ❌ MCP integration - Server configured but no tools defined
+
+**Files Modified Today:**
+
+- `agent-backend/server.js` - Fixed event parsing, added logging
+- `scripts/configure-vapi-number.sh` - Created VAPI config script
+- `docs/database-schema.sql` - Consolidated database schema
+- `.env.example` - Added VAPI_WEBHOOK_TOKEN example
+
+---
+
 **Date:** 2025-10-02  
 **Author:** Development Team  
 **Summary:** Security & Performance Optimizations Complete
