@@ -531,6 +531,7 @@ async function handleAssistantRequest(event) {
       model: {
         provider: "openai",
         model: "gpt-4",
+        toolChoice: "auto",
         messages: [{
           role: "system",
           content: `You are an AI receptionist for ${client.client_name}. 
@@ -579,6 +580,7 @@ Always be polite and professional.`
         tools: [
           {
             type: "function",
+            async: false,
             function: {
               name: "find_or_create_contact",
               description: "Find or create a contact in the CRM. Use this after collecting the customer's name and phone number, before booking appointments.",
@@ -612,6 +614,7 @@ Always be polite and professional.`
           },
           {
             type: "function",
+            async: false,
             function: {
               name: "check_availability",
               description: "Check available appointment slots for a date range. Use this when a customer asks about availability or wants to book an appointment.",
@@ -641,6 +644,7 @@ Always be polite and professional.`
           },
           {
             type: "function",
+            async: false,
             function: {
               name: "book_appointment",
               description: "Book an appointment after checking availability and getting customer confirmation.",

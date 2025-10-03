@@ -6,6 +6,61 @@ This log tracks key decisions, status updates, and context for the "1000x Agent"
 
 ---
 
+**Date:** 2025-10-03 (Late Evening Update)
+**Author:** Development Team  
+**Summary:** Voice AI Working - Calendar Tools Integration In Progress
+
+**Current Status:**
+
+✅ Voice AI is fully operational and having natural conversations
+✅ Dynamic assistant config working with client-specific context
+✅ Date/time awareness added - AI knows current date and can interpret "today", "tomorrow"
+✅ Timezone handling implemented (PST for Automated Profits)
+⚠️ Tool calling not yet working - investigating VAPI requirements for dynamic assistants
+
+**Accomplishments Today:**
+
+1. **Got VAPI calls working end-to-end**
+   - Fixed voice ID issue (using actual 11labs ID instead of name)
+   - Fixed assistant config wrapper (needs `{ assistant: {...} }`)
+   - Resolved webhook rejection errors
+
+2. **Added contextual awareness**
+   - Current date/time in client's timezone
+   - Client info (name, timezone, ID) in prompts
+   - Caller's phone number available to AI
+
+3. **Improved conversation quality**
+   - Removed service type requirement (using generic "Appointment")
+   - Stopped tool narration ("checking the system")
+   - Reduced phone number repetition
+   - Better date/time handling instructions
+
+4. **Integrated calendar tools in config**
+   - find_or_create_contact
+   - check_availability  
+   - book_appointment
+   - All tools configured with proper server URLs
+
+**Known Issues:**
+
+1. **Tools not being called**
+   - VAPI may not support `server` URLs in dynamic assistant responses
+   - May need to pre-register tools in VAPI dashboard
+   - Need to investigate VAPI docs on function calling with transient assistants
+
+2. **Minor UX issues**
+   - AI occasionally repeats caller's number unnecessarily (being addressed)
+
+**Next Steps:**
+
+- [ ] Research VAPI function calling for dynamic/transient assistants
+- [ ] Test if tools need to be pre-registered in VAPI dashboard
+- [ ] Consider using MCP endpoint instead of individual tool endpoints
+- [ ] Test full booking flow once tools are working
+
+---
+
 **Date:** 2025-10-03 (Evening Update)
 **Author:** Development Team  
 **Summary:** VAPI Integration WORKING - Dynamic Assistant Successfully Configured
