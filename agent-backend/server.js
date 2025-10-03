@@ -433,6 +433,7 @@ app.post("/vapi/webhooks", verifyBearerToken, async (req, res) => {
     // Handle assistant-request synchronously (VAPI needs immediate response)
     if (eventType === "assistant-request") {
       const assistantConfig = await handleAssistantRequest(event);
+      console.log('[Assistant Request] Sending config to VAPI:', JSON.stringify(assistantConfig, null, 2));
       return res.status(200).json(assistantConfig);
     }
 
