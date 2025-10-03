@@ -551,7 +551,7 @@ Always be polite and end with "Is there anything else I can help you with?"`
       },
       voice: {
         provider: "11labs",
-        voiceId: "paula"
+        voiceId: "rzF2ITnIG6HbQ1aRdhAv"
       }
     };
 
