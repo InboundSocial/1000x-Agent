@@ -468,11 +468,10 @@ app.post("/vapi/webhooks", verifyBearerToken, async (req, res) => {
 // Handle assistant-request - Return dynamic assistant config
 async function handleAssistantRequest(event) {
   try {
-    console.log('[Assistant Request] Raw event:', JSON.stringify(event, null, 2));
-    
-    const call = event.call || {};
-    const phoneNumberCalled = call.phoneNumber || call.to;
-    const customerNumber = call.customer?.number || call.from;
+    // VAPI sends event wrapped in a message object
+    const message = event.message || event;
+    const phoneNumberCalled = message.phoneNumber?.number;
+    const customerNumber = message.customer?.number;
 
     console.log(`[Assistant Request] Number called: ${phoneNumberCalled}, From: ${customerNumber}`);
 
