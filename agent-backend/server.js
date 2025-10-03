@@ -161,6 +161,7 @@ app.post("/mcp", async (req, res) => {
 // expects JSON body: { client_id, phone?, email?, name? }
 app.post("/tools/find_or_create_contact", async (req, res) => {
   try {
+    console.log("[Tool: find_or_create_contact] Called with:", JSON.stringify(req.body, null, 2));
     const { client_id, phone, email, name } = req.body;
 
     if (!client_id || (!phone && !email)) {
@@ -267,6 +268,7 @@ app.post("/tools/find_or_create_contact", async (req, res) => {
 // expects JSON body: { client_id, start_date, end_date }
 app.post("/tools/check_availability", async (req, res) => {
   try {
+    console.log("[Tool: check_availability] Called with:", JSON.stringify(req.body, null, 2));
     const { client_id, start_date, end_date } = req.body;
 
     if (!client_id || !start_date || !end_date) {
@@ -341,6 +343,7 @@ app.post("/tools/check_availability", async (req, res) => {
 // expects JSON body: { client_id, contact_id, start_time, end_time, title?, notes? }
 app.post("/tools/book_appointment", async (req, res) => {
   try {
+    console.log("[Tool: book_appointment] Called with:", JSON.stringify(req.body, null, 2));
     const { client_id, contact_id, start_time, end_time, title, notes } = req.body;
 
     if (!client_id || !contact_id || !start_time || !end_time) {
@@ -453,6 +456,11 @@ app.post("/vapi/webhooks", verifyBearerToken, async (req, res) => {
       
       case "status-update":
         await handleStatusUpdate(event);
+        break;
+      
+      case "tool-calls":
+        console.log("[Tool Calls] Received tool-calls event:", JSON.stringify(event, null, 2));
+        await handleToolCalls(event);
         break;
       
       default:
@@ -882,6 +890,17 @@ ${recordingUrl ? `🎙️ Recording: ${recordingUrl}` : ''}
 
   } catch (e) {
     console.error("[Call Ended] Error:", e);
+  }
+}
+
+// Handle tool calls
+async function handleToolCalls(event) {
+  try {
+    console.log("[Tool Calls] Tool call received - this should be handled by individual tool endpoints");
+    // Tool calls should go to individual server.url endpoints, not here
+    // This is just for logging/debugging
+  } catch (e) {
+    console.error("[Tool Calls] Error:", e);
   }
 }
 
