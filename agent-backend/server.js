@@ -539,23 +539,131 @@ Your responsibilities:
 Business Details:
 - Name: ${client.client_name}
 - Timezone: ${client.timezone}
+- Client ID: ${client.id}
+
+Caller Information:
+- Caller's phone number: ${customerNumber || 'Unknown'}
+- Use this number naturally in conversation (e.g., "In case we get disconnected, I can reach you back at ${customerNumber || 'your number'}, correct?")
+- For returning customers, you can reference this number when pulling up their details
 
 When booking appointments:
-1. Ask for their name and phone number
-2. Ask what service they need
-3. Check availability (use tools silently - never mention "checking the system" or "using the booking tool")
-4. Offer available time slots naturally
-5. Confirm the booking
-6. Confirm details back to the customer
+1. Ask for their name and phone number (or confirm the number you already have)
+2. Ask what service they need and their preferred date/time
+3. Check availability using check_availability function
+4. Offer available time slots naturally (e.g., "I have 2pm, 3pm, or 4pm available on Tuesday")
+5. Once they choose a time, book it with book_appointment function
+6. Confirm the booking details back to them
 
 Critical rules:
 - NEVER mention tools, systems, databases, or technical processes to callers
 - NEVER make up services, prices, or information - if you don't have the information, say "Let me check on that for you" then use available tools
 - If asked about services you don't have information for, say "What specific service are you interested in?" instead of listing made-up options
 - Use tools in the background without narrating what you're doing
+- Always use the client_id ${client.id} when calling functions
 
 Always be polite and professional.`
-        }]
+        }],
+        tools: [
+          {
+            type: "function",
+            function: {
+              name: "find_or_create_contact",
+              description: "Find or create a contact in the CRM. Use this after collecting the customer's name and phone number, before booking appointments.",
+              parameters: {
+                type: "object",
+                properties: {
+                  client_id: {
+                    type: "string",
+                    description: "The client ID - always use ${client.id}",
+                    default: "${client.id}"
+                  },
+                  name: {
+                    type: "string",
+                    description: "Customer's full name"
+                  },
+                  phone: {
+                    type: "string",
+                    description: "Customer's phone number"
+                  },
+                  email: {
+                    type: "string",
+                    description: "Customer's email address (optional)"
+                  }
+                },
+                required: ["client_id", "phone"]
+              }
+            },
+            server: {
+              url: "${process.env.BACKEND_URL || 'https://agent-backend-7v2w.onrender.com'}/tools/find_or_create_contact"
+            }
+          },
+          {
+            type: "function",
+            function: {
+              name: "check_availability",
+              description: "Check available appointment slots for a date range. Use this when a customer asks about availability or wants to book an appointment.",
+              parameters: {
+                type: "object",
+                properties: {
+                  client_id: {
+                    type: "string",
+                    description: "The client ID - always use ${client.id}",
+                    default: "${client.id}"
+                  },
+                  start_date: {
+                    type: "string",
+                    description: "Start date in ISO format (e.g., 2025-10-05T00:00:00Z)"
+                  },
+                  end_date: {
+                    type: "string",
+                    description: "End date in ISO format (e.g., 2025-10-05T23:59:59Z)"
+                  }
+                },
+                required: ["client_id", "start_date", "end_date"]
+              }
+            },
+            server: {
+              url: "${process.env.BACKEND_URL || 'https://agent-backend-7v2w.onrender.com'}/tools/check_availability"
+            }
+          },
+          {
+            type: "function",
+            function: {
+              name: "book_appointment",
+              description: "Book an appointment after checking availability and getting customer confirmation.",
+              parameters: {
+                type: "object",
+                properties: {
+                  client_id: {
+                    type: "string",
+                    description: "The client ID - always use ${client.id}",
+                    default: "${client.id}"
+                  },
+                  contact_id: {
+                    type: "string",
+                    description: "The GHL contact ID (get this from find_or_create_contact first)"
+                  },
+                  start_time: {
+                    type: "string",
+                    description: "Appointment start time in ISO format"
+                  },
+                  end_time: {
+                    type: "string",
+                    description: "Appointment end time in ISO format"
+                  },
+                  title: {
+                    type: "string",
+                    description: "Appointment title/service type"
+                  }
+                },
+                required: ["client_id", "contact_id", "start_time", "end_time"]
+              }
+            },
+            server: {
+              url: "${process.env.BACKEND_URL || 'https://agent-backend-7v2w.onrender.com'}/tools/book_appointment"
+            }
+          }
+        ]
       },
       voice: {
         provider: "11labs",
