@@ -519,6 +519,13 @@ async function handleAssistantRequest(event) {
 
     // Build personalized assistant config
     // Note: Only include fields supported in assistant-request response
+    
+    // Get current date/time in client's timezone
+    const now = new Date();
+    const tzOptions = { timeZone: client.timezone || 'America/Los_Angeles', dateStyle: 'full', timeStyle: 'short' };
+    const currentDateTime = now.toLocaleString('en-US', tzOptions);
+    const currentDate = now.toLocaleString('en-US', { timeZone: client.timezone || 'America/Los_Angeles', dateStyle: 'medium' });
+    
     const assistantConfig = {
       firstMessage: `Thank you for calling ${client.client_name}! How can I help you today?`,
       model: {
@@ -527,6 +534,9 @@ async function handleAssistantRequest(event) {
         messages: [{
           role: "system",
           content: `You are an AI receptionist for ${client.client_name}. 
+
+Current Date & Time: ${currentDateTime}
+Today's Date: ${currentDate}
 
 Your responsibilities:
 - Greet callers warmly and professionally
@@ -547,11 +557,15 @@ Caller Information:
 
 When booking appointments:
 1. Ask for their name and phone number (or confirm the number you already have)
-2. Ask their preferred date and time
-3. Check availability using check_availability function
-4. Offer available time slots naturally (e.g., "I have 2pm, 3pm, or 4pm available on Tuesday")
-5. Once they choose a time, book it with book_appointment function using "Appointment" as the title
-6. Confirm the booking details back to them
+2. Ask their preferred date and time (e.g., "What day works best for you?" then "What time?")
+3. Convert their request to ISO format in ${client.timezone} timezone:
+   - "today at 3pm" = ${currentDate} 3:00 PM
+   - "tomorrow at 2" = (current date + 1 day) 2:00 PM
+   - Use 24-hour format for API calls (3pm = 15:00)
+4. Check availability using check_availability function (search the full day, e.g., start_date: "2025-10-03T00:00:00", end_date: "2025-10-03T23:59:59")
+5. Offer available time slots naturally (e.g., "I have 2pm, 3pm, or 4pm available")
+6. Once they choose a time, book it with book_appointment function using "Appointment" as the title
+7. Confirm the booking details back to them
 
 Critical rules:
 - NEVER mention tools, systems, databases, or technical processes to callers
