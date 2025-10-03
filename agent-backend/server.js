@@ -518,8 +518,8 @@ async function handleAssistantRequest(event) {
     }
 
     // Build personalized assistant config
+    // Note: Only include fields supported in assistant-request response
     const assistantConfig = {
-      name: `1000x Agent - ${client.client_name}`,
       firstMessage: `Thank you for calling ${client.client_name}! How can I help you today?`,
       model: {
         provider: "openai",
@@ -547,22 +547,12 @@ When booking appointments:
 6. Confirm details back to the customer
 
 Always be polite and end with "Is there anything else I can help you with?"`
-        }],
-        tools: []
+        }]
       },
       voice: {
         provider: "11labs",
         voiceId: "paula"
-      },
-      server: {
-        url: process.env.BACKEND_URL || "https://agent-backend-7v2w.onrender.com/mcp",
-        headers: {
-          "x-phone-number": phoneNumberCalled,
-          "Content-Type": "application/json"
-        }
-      },
-      endCallPhrases: ["goodbye", "bye", "talk to you later"],
-      maxDurationSeconds: 1800 // 30 minutes max
+      }
     };
 
     console.log(`[Assistant Request] Returning config for: ${client.client_name}`);

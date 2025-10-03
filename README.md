@@ -18,7 +18,7 @@ npm install
 npm run dev:backend
 ```
 
-**First time setup?** See [SETUP.md](./SETUP.md) for detailed instructions.
+**First time setup?** See [SETUP.md](./docs/SETUP.md) for detailed instructions.
 
 ---
 
@@ -240,7 +240,7 @@ app.post("/tools/send_sms", async (req, res) => {
 
 ## 📚 Documentation
 
-- **[SETUP.md](./SETUP.md)** - Complete setup guide with Doppler, Supabase, and troubleshooting
+- **[SETUP.md](./docs/SETUP.md)** - Complete setup guide with Doppler, Supabase, and troubleshooting
 - **[.github/SECURITY.md](./.github/SECURITY.md)** - Security and secrets management
 
 ---
@@ -281,4 +281,4 @@ ISC
 
 ---
 
-**Need help?** Check [SETUP.md](./SETUP.md) for detailed instructions or open an issue.
+**Need help?** Check [SETUP.md](./docs/SETUP.md) for detailed instructions or open an issue.
