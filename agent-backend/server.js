@@ -523,7 +523,7 @@ async function handleAssistantRequest(event) {
       firstMessage: `Thank you for calling ${client.client_name}! How can I help you today?`,
       model: {
         provider: "openai",
-        model: "gpt-4o",
+        model: "gpt-4",
         messages: [{
           role: "system",
           content: `You are an AI receptionist for ${client.client_name}. 
