@@ -241,7 +241,15 @@ app.post("/tools/find_or_create_contact", async (req, res) => {
     const contactData = { locationId: location_id };
     if (phone) contactData.phone = phone;
     if (email) contactData.email = email;
-    if (name) contactData.name = name;
+    
+    // Split name into firstName and lastName for GHL API
+    if (name) {
+      const nameParts = name.trim().split(/\s+/);
+      contactData.firstName = nameParts[0] || '';
+      contactData.lastName = nameParts.slice(1).join(' ') || '';
+    }
+
+    console.log("[Tool: find_or_create_contact] Creating contact with data:", JSON.stringify(contactData, null, 2));
 
     const createResp = await fetch(`${GHL_BASE}/contacts/`, {
       method: "POST",

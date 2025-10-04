@@ -66,6 +66,12 @@ The initial release of the 1000x Agent will _not_ include the following capabili
 - **F-1.3: Email Channel:** Handle inbound/outbound emails.
 - **R-1.1 (Technical Investigation):** Define a unified platform or strategy to handle SMS and email alongside the VAPI voice agent.
 - **F-1.4: Call Recording & Summarization:** Record all inbound calls and generate summaries.
+- **F-1.5: Enhanced Voice Quality & Naturalness:** Implement advanced voice configuration for human-like conversational quality.
+  - Configure voice model parameters (stability, similarity boost, style, speaker boost)
+  - Evaluate and integrate premium voice providers (ElevenLabs Turbo v2.5, PlayHT, Cartesia, Deepgram Aura)
+  - Add conversational elements (natural pauses, fillers, emotion variation)
+  - Implement background ambience and noise suppression
+  - Enable context-aware prosody (pacing, emphasis, tone variation based on conversation flow)
 
 **4.2. Core Agent Intelligence & Capabilities**
 
