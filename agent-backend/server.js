@@ -791,7 +791,7 @@ Always be polite and professional.`
       },
       voice: {
         provider: "11labs",
-        voiceId: "rzF2ITnIG6HbQ1aRdhAv"
+        voiceId: "NDTYOmYEjbDIVCKB35i3"
       }
     };
 
